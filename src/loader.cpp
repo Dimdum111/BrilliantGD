@@ -50,6 +50,7 @@ struct Mod {
 };
 
 std::vector<std::unique_ptr<Mod>> g_mods;
+std::unique_ptr<Mod> g_repl;  // sandbox used by the console "lua" command
 Clock::time_point g_deadline;
 
 Mod* modOf(lua_State* L) { return static_cast<Mod*>(lua_callbacks(L)->userdata); }
@@ -369,6 +370,7 @@ void openApi(lua_State* L, Mod& m) {
     setFn(L, "read_u16", l_read<uint16_t>);
     setFn(L, "read_u32", l_read<uint32_t>);
     setFn(L, "read_i32", l_read<int32_t>);
+    setFn(L, "read_ptr", l_read<uintptr_t>);
     setFn(L, "read_f32", l_read<float>);
     setFn(L, "read_f64", l_read<double>);
     setFn(L, "read_bytes", l_readBytes);
@@ -376,6 +378,7 @@ void openApi(lua_State* L, Mod& m) {
     setFn(L, "write_u16", l_write<uint16_t>);
     setFn(L, "write_u32", l_write<uint32_t>);
     setFn(L, "write_i32", l_write<int32_t>);
+    setFn(L, "write_ptr", l_write<uintptr_t>);
     setFn(L, "write_f32", l_write<float>);
     setFn(L, "write_f64", l_write<double>);
     setFn(L, "write_bytes", l_writeBytes);
@@ -394,6 +397,15 @@ void openApi(lua_State* L, Mod& m) {
     // Lock down the standard libraries; each mod still gets its own writable globals.
     luaL_sandbox(L);
     luaL_sandboxthread(L);
+}
+
+lua_State* newState(Mod& m) {
+    lua_State* L = luaL_newstate();
+    m.L = L;
+    lua_callbacks(L)->userdata = &m;
+    lua_callbacks(L)->interrupt = interrupt;
+    openApi(L, m);
+    return L;
 }
 
 bool validId(const std::string& id) {
@@ -439,11 +451,7 @@ void loadMod(const fs::path& dir) {
         return;
     }
 
-    lua_State* L = luaL_newstate();
-    m->L = L;
-    lua_callbacks(L)->userdata = m.get();
-    lua_callbacks(L)->interrupt = interrupt;
-    openApi(L, *m);
+    lua_State* L = newState(*m);
 
     if (!loadChunk(L, src, "@" + m->id + "/" + mainFile)) {
         write_log(Level::Error, "[" + m->id + "] " + errText(L));
@@ -459,6 +467,83 @@ void loadMod(const fs::path& dir) {
 
     write_log(Level::Info, "Loaded " + m->name + " v" + m->version + " (" + m->id + ")");
     g_mods.push_back(std::move(m));
+}
+
+void closeRepl() {
+    if (g_repl && g_repl->L) lua_close(g_repl->L);
+    g_repl.reset();
+}
+
+// Runs a line of Luau typed into the console and prints whatever it returns.
+void evalRepl(const std::string& code) {
+    if (!g_repl) {
+        g_repl = std::make_unique<Mod>();
+        g_repl->id = "console";
+        g_repl->name = "Console";
+        g_repl->version = kVersion;
+        g_repl->author = "BrilliantGd";
+        g_repl->dir = rootDir();
+        newState(*g_repl);
+    }
+    lua_State* L = g_repl->L;
+    int top = lua_gettop(L);
+
+    // Try it as an expression first so `1 + 1` prints 2, then fall back to a statement.
+    bool ok = loadChunk(L, "return " + code, "=console");
+    if (!ok) {
+        lua_settop(L, top);
+        ok = loadChunk(L, code, "=console");
+    }
+    if (!ok) {
+        write_log(Level::Error, errText(L));
+        lua_settop(L, top);
+        return;
+    }
+
+    arm();
+    if (lua_pcall(L, 0, LUA_MULTRET, 0) != LUA_OK) {
+        write_log(Level::Error, errText(L));
+        lua_settop(L, top);
+        return;
+    }
+
+    std::string out;
+    int last = lua_gettop(L);
+    for (int i = top + 1; i <= last; i++) {
+        size_t len = 0;
+        const char* s = luaL_tolstring(L, i, &len);
+        if (i > top + 1) out += "\t";
+        out.append(s, len);
+        lua_pop(L, 1);
+    }
+    lua_settop(L, top);
+    if (!out.empty()) write_log(Level::Info, "= " + out);
+}
+
+void handleCommand(const std::string& line) {
+    size_t sp = line.find(' ');
+    std::string cmd = line.substr(0, sp);
+    std::string rest = sp == std::string::npos ? "" : line.substr(sp + 1);
+
+    if (cmd == "help") {
+        write_log(Level::Info, "Commands: help | mods | reload | clear | lua <code>");
+        write_log(Level::Info, "Example: lua bgd.base()   (hex: lua string.format('0x%X', bgd.base()))");
+    } else if (cmd == "mods") {
+        if (g_mods.empty()) write_log(Level::Info, "No mods loaded.");
+        for (auto& m : g_mods)
+            write_log(Level::Info, m->name + " v" + m->version + " by " + m->author + " (" + m->id + ")");
+    } else if (cmd == "reload") {
+        write_log(Level::Info, "Reloading mods...");
+        unload_all();
+        load_all();
+    } else if (cmd == "clear") {
+        console::clear();
+    } else if (cmd == "lua") {
+        if (rest.empty()) write_log(Level::Warn, "Usage: lua <code>");
+        else evalRepl(rest);
+    } else {
+        write_log(Level::Warn, "Unknown command '" + cmd + "'. Type 'help'.");
+    }
 }
 
 void hotReloadCheck() {
@@ -492,12 +577,15 @@ void load_all() {
 }
 
 void unload_all() {
+    closeRepl();
     for (auto& m : g_mods)
         if (m->L) lua_close(m->L);
     g_mods.clear();
 }
 
 void on_frame(double dt) {
+    std::string command;
+    while (console::pop_command(command)) handleCommand(command);
     hotReloadCheck();
     for (auto& m : g_mods) {
         runTimers(*m, dt);

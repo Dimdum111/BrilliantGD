@@ -31,6 +31,7 @@ declare bgd: {
 		read_u16: (addr: number) -> number,
 		read_u32: (addr: number) -> number,
 		read_i32: (addr: number) -> number,
+		read_ptr: (addr: number) -> number, -- pointer-sized (8 bytes on 64-bit GD)
 		read_f32: (addr: number) -> number,
 		read_f64: (addr: number) -> number,
 		read_bytes: (addr: number, length: number) -> string,
@@ -38,6 +39,7 @@ declare bgd: {
 		write_u16: (addr: number, value: number) -> (),
 		write_u32: (addr: number, value: number) -> (),
 		write_i32: (addr: number, value: number) -> (),
+		write_ptr: (addr: number, value: number) -> (),
 		write_f32: (addr: number, value: number) -> (),
 		write_f64: (addr: number, value: number) -> (),
 		write_bytes: (addr: number, data: string) -> (),

@@ -1,8 +1,8 @@
-# Cross-compile a 32-bit Windows DLL from Linux:
-#   cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/i686-mingw.cmake -DCMAKE_BUILD_TYPE=Release
+# Cross-compile a 64-bit Windows DLL from Linux:
+#   cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/x86_64-mingw.cmake -DCMAKE_BUILD_TYPE=Release
 set(CMAKE_SYSTEM_NAME Windows)
-set(CMAKE_SYSTEM_PROCESSOR i686)
-set(TRIPLE i686-w64-mingw32)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+set(TRIPLE x86_64-w64-mingw32)
 set(CMAKE_C_COMPILER   ${TRIPLE}-gcc)
 set(CMAKE_CXX_COMPILER ${TRIPLE}-g++)
 set(CMAKE_RC_COMPILER  ${TRIPLE}-windres)

@@ -30,6 +30,7 @@ void write_log(Level level, const std::string& message) {
     std::lock_guard lock(mutex);
     OutputDebugStringA(("[BrilliantGd] " + line).c_str());
     file << line << std::flush;
+    console::print(level, message);
 }
 
 bool game_focused() {
@@ -74,6 +75,7 @@ void __fastcall hkDrawScene(void* self, void*) {
 
 DWORD WINAPI bootstrap(LPVOID) {
     using bgd::Level;
+    bgd::console::init_if_enabled();  // first, so early messages show up too
     bgd::write_log(Level::Info, "BrilliantGd 0.1.0 starting");
 
     HMODULE cocos = nullptr;

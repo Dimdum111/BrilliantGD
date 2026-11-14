@@ -1,5 +1,5 @@
 # BrilliantGd Makefile
-# Cross-compiles build/XInput9_1_0.dll with MinGW-w64 (Linux, or an MSYS2 MinGW shell).
+# Cross-compiles build/XInput1_4.dll with MinGW-w64 (Linux, or an MSYS2 MinGW shell).
 #
 #   make                         build the DLL (downloads dependencies on the first run)
 #   make install GD_DIR="/path/to/Geometry Dash"
@@ -7,17 +7,17 @@
 #   make distclean               also remove the downloaded dependencies
 #
 # Options:
-#   make TRIPLE=x86_64-w64-mingw32   64-bit build (default is 32-bit: i686-w64-mingw32)
+#   make TRIPLE=i686-w64-mingw32     32-bit build (default is 64-bit: x86_64-w64-mingw32)
 #   make CXX=g++ CC=gcc              use the compilers on your PATH (e.g. MSYS2)
 
-TRIPLE   ?= i686-w64-mingw32
+TRIPLE   ?= x86_64-w64-mingw32
 CXX      := $(TRIPLE)-g++
 CC       := $(TRIPLE)-gcc
 
 LUAU_TAG ?= 0.650
 JSON_VER ?= v3.11.3
 
-OUT      := build/XInput9_1_0.dll
+OUT      := build/XInput1_4.dll
 OBJ_DIR  := build/obj
 STAMP    := deps/.stamp
 
@@ -106,7 +106,7 @@ install: all
 	mkdir -p "$(GD_DIR)/BrilliantGd/mods"
 	cp -r example-mod/hello-world "$(GD_DIR)/BrilliantGd/mods/"
 	@echo "Installed. On Linux/Proton, set the Steam launch option:"
-	@echo '  WINEDLLOVERRIDES="XInput9_1_0=n,b" %command%'
+	@echo '  WINEDLLOVERRIDES="XInput1_4=n,b" %command%'
 
 clean:
 	rm -rf build

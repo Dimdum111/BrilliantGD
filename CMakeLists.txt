@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(BrilliantGd LANGUAGES CXX)
 
-# Geometry Dash on Windows has historically been a 32-bit process, so configure with:
-#   cmake -B build -A Win32
-# (use -A x64 only if your GD build is 64-bit)
+# Current Geometry Dash for Windows is a 64-bit process, so configure with:
+#   cmake -B build -A x64
+# (use -A Win32 only for an old 32-bit GD build)
 message(STATUS "Pointer size: ${CMAKE_SIZEOF_VOID_P} bytes")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -36,6 +36,7 @@ FetchContent_MakeAvailable(luau minhook json)
 
 add_library(BrilliantGd SHARED
   src/main.cpp
+  src/console.cpp
   src/loader.cpp
   src/proxy.cpp)
 
@@ -46,7 +47,7 @@ target_compile_definitions(BrilliantGd PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 # The DLL masquerades as the XInput DLL that Geometry Dash imports, so Windows
 # loads it automatically when the game starts. It forwards real calls to System32.
 set_target_properties(BrilliantGd PROPERTIES
-  OUTPUT_NAME "XInput9_1_0"
+  OUTPUT_NAME "XInput1_4"
   PREFIX "")
 
 if (MINGW)
