@@ -90,7 +90,7 @@ void init_if_enabled() {
 
     if (HANDLE t = CreateThread(nullptr, 0, inputThread, nullptr, 0, nullptr)) CloseHandle(t);
 
-    write_log(Level::Info, "Console ready. Type 'help' for commands.");
+    write_log(Level::Info, "BrilliantGD Loaded. run 'help' for list of avalible commands.");
 }
 
 void print(Level level, const std::string& message) {
