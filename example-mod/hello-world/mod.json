@@ -1,0 +1,7 @@
+{
+  "id": "example.hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "author": "You",
+  "main": "main.luau"
+}
