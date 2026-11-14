@@ -10,20 +10,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install MinGW-w64 (32-bit, POSIX threads)
+      - name: Install MinGW-w64 (64-bit, POSIX threads)
         run: |
           sudo apt-get update
           sudo apt-get install -y mingw-w64
-          sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
-          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
       - name: Build
         run: make -j"$(nproc)"
+
+      - name: Check the DLL
+        run: |
+          set -e
+          ls -la build
+          test -f build/XInput1_4.dll || { echo "::error::build/XInput1_4.dll was not produced"; exit 1; }
+          file build/XInput1_4.dll
+          x86_64-w64-mingw32-objdump -p build/XInput1_4.dll | grep -E "XInput|DLL Name" || true
+
+      - name: Collect files
+        run: |
+          mkdir -p dist
+          cp build/XInput1_4.dll dist/
+          cp -r example-mod dist/example-mod
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: BrilliantGd
-          path: |
-            build/XInput9_1_0.dll
-            example-mod/
+          path: dist/
+          if-no-files-found: error
