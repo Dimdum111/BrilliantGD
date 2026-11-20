@@ -16,16 +16,18 @@ CC       := $(TRIPLE)-gcc
 
 LUAU_TAG ?= 0.650
 JSON_VER ?= v3.11.3
+IMGUI_TAG ?= v1.91.9
 
 OUT      := build/XInput1_4.dll
 OBJ_DIR  := build/obj
 STAMP    := deps/.stamp
+IMGUI_SRC := deps/imgui/imgui.cpp
 
 .PHONY: all dll check install clean distclean
 
 # Step 1: make sure dependencies exist. Step 2 runs in a fresh make so that the
 # wildcards below see the downloaded sources.
-all: $(STAMP)
+all: $(STAMP) $(IMGUI_SRC)
 	@$(MAKE) --no-print-directory dll
 
 $(STAMP):
@@ -37,6 +39,11 @@ $(STAMP):
 	git clone --depth 1 https://github.com/TsudaKageyu/minhook.git deps/minhook
 	curl -fL -o deps/json/include/nlohmann/json.hpp https://github.com/nlohmann/json/releases/download/$(JSON_VER)/json.hpp
 	touch $@
+
+$(IMGUI_SRC):
+	@command -v git >/dev/null || { echo "error: git is required"; exit 1; }
+	rm -rf deps/imgui
+	git clone --depth 1 --branch $(IMGUI_TAG) https://github.com/ocornut/imgui.git deps/imgui
 
 # ---------------------------------------------------------------- sources
 
@@ -53,21 +60,28 @@ LUAU_SRCS := $(wildcard deps/luau/Ast/src/*.cpp) \
 MH_SRCS   := deps/minhook/src/buffer.c deps/minhook/src/hook.c \
              deps/minhook/src/trampoline.c deps/minhook/src/hde/$(HDE).c
 
-OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(OWN_SRCS) $(LUAU_SRCS)) \
+IMGUI_SRCS := deps/imgui/imgui.cpp deps/imgui/imgui_draw.cpp deps/imgui/imgui_tables.cpp \
+              deps/imgui/imgui_widgets.cpp deps/imgui/backends/imgui_impl_win32.cpp \
+              deps/imgui/backends/imgui_impl_opengl3.cpp
+
+OBJS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(OWN_SRCS) $(LUAU_SRCS) $(IMGUI_SRCS)) \
         $(patsubst %.c,$(OBJ_DIR)/%.o,$(MH_SRCS))
 
 INCLUDES := -Isrc \
             -Ideps/json/include \
             -Ideps/minhook/include \
+            -Ideps/imgui \
+            -Ideps/imgui/backends \
             -Ideps/luau/Common/include \
             -Ideps/luau/Ast/include \
             -Ideps/luau/Compiler/include \
             -Ideps/luau/VM/include
 
-COMMON   := -O2 -DNDEBUG -DNOMINMAX -DWIN32_LEAN_AND_MEAN -MMD -MP
+COMMON   := -O2 -DNDEBUG -DNOMINMAX -DWIN32_LEAN_AND_MEAN -DIMGUI_IMPL_WIN32_DISABLE_GAMEPAD -MMD -MP
 CXXFLAGS := -std=c++20 $(COMMON) -Wall -Wno-cast-function-type $(INCLUDES)
 CFLAGS   := $(COMMON) $(INCLUDES)
 LDFLAGS  := -shared -static -static-libgcc -static-libstdc++ -Wl,--kill-at -s
+LDLIBS   := -lopengl32 -lgdi32 -limm32 -ldwmapi
 
 # Don't spam warnings from third-party code.
 $(OBJ_DIR)/deps/%.o: CXXFLAGS += -w
@@ -85,7 +99,7 @@ check:
 
 $(OUT): $(OBJS)
 	@mkdir -p $(dir $@)
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)

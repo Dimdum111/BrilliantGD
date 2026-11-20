@@ -392,6 +392,9 @@ void openApi(lua_State* L, Mod& m) {
     setStr(L, "dir", m.dir.string());
     lua_setfield(L, -2, "mod");
 
+    ui::push_api(L, m.id);  // bgd.ui
+    lua_setfield(L, -2, "ui");
+
     lua_setglobal(L, "bgd");
 
     // Lock down the standard libraries; each mod still gets its own writable globals.
@@ -406,6 +409,11 @@ lua_State* newState(Mod& m) {
     lua_callbacks(L)->interrupt = interrupt;
     openApi(L, m);
     return L;
+}
+
+void closeState(lua_State* L) {
+    ui::forget_state(L);
+    lua_close(L);
 }
 
 bool validId(const std::string& id) {
@@ -455,13 +463,13 @@ void loadMod(const fs::path& dir) {
 
     if (!loadChunk(L, src, "@" + m->id + "/" + mainFile)) {
         write_log(Level::Error, "[" + m->id + "] " + errText(L));
-        lua_close(L);
+        closeState(L);
         return;
     }
     arm();
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
         write_log(Level::Error, "[" + m->id + "] " + errText(L));
-        lua_close(L);
+        closeState(L);
         return;
     }
 
@@ -470,7 +478,7 @@ void loadMod(const fs::path& dir) {
 }
 
 void closeRepl() {
-    if (g_repl && g_repl->L) lua_close(g_repl->L);
+    if (g_repl && g_repl->L) closeState(g_repl->L);
     g_repl.reset();
 }
 
@@ -560,6 +568,8 @@ void hotReloadCheck() {
 
 }  // namespace
 
+void arm_budget() { arm(); }
+
 void load_all() {
     fs::path modsDir = rootDir() / "mods";
     std::error_code ec;
@@ -579,7 +589,7 @@ void load_all() {
 void unload_all() {
     closeRepl();
     for (auto& m : g_mods)
-        if (m->L) lua_close(m->L);
+        if (m->L) closeState(m->L);
     g_mods.clear();
 }
 

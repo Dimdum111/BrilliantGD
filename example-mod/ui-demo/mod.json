@@ -1,0 +1,7 @@
+{
+  "id": "example.ui-demo",
+  "name": "UI Demo",
+  "version": "1.0.0",
+  "author": "You",
+  "main": "main.luau"
+}
