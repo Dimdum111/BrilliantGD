@@ -1,11 +1,22 @@
-// Forwards the XInput 1.4 API to the real DLL in System32, so the game keeps
-// working while BrilliantGd gets loaded just by sitting next to the exe.
-// (libcocos2d.dll imports XINPUT1_4.dll, which is why we impersonate that one.)
+// Stands in for XINPUT1_4.dll (libcocos2d.dll imports it), so the game loads BrilliantGd
+// just by finding this file next to the exe.
+//
+// By default every function reports "no controller connected" and never touches the real
+// XInput DLL. Forwarding calls to the real DLL (set "xinput_passthrough": true in
+// BrilliantGd/config.json) is optional, because a mismatch between what the game calls and
+// what we forward can crash inside the real DLL.
 #include <windows.h>
 
 #include <string>
 
+#include "bgd.hpp"
+
 namespace {
+
+bool passthrough() {
+    static const bool enabled = bgd::config_bool("xinput_passthrough", false);
+    return enabled;
+}
 
 HMODULE realXInput() {
     static HMODULE h = [] {
@@ -42,36 +53,43 @@ F resolve(const char* name) {
 extern "C" {
 
 BGD_DLLEXPORT DWORD WINAPI XInputGetState(DWORD index, void* state) {
+    if (!passthrough()) return ERROR_DEVICE_NOT_CONNECTED;
     static auto fn = resolve<DWORD(WINAPI*)(DWORD, void*)>("XInputGetState");
     return fn ? fn(index, state) : ERROR_DEVICE_NOT_CONNECTED;
 }
 
 BGD_DLLEXPORT DWORD WINAPI XInputSetState(DWORD index, void* vibration) {
+    if (!passthrough()) return ERROR_DEVICE_NOT_CONNECTED;
     static auto fn = resolve<DWORD(WINAPI*)(DWORD, void*)>("XInputSetState");
     return fn ? fn(index, vibration) : ERROR_DEVICE_NOT_CONNECTED;
 }
 
 BGD_DLLEXPORT DWORD WINAPI XInputGetCapabilities(DWORD index, DWORD flags, void* caps) {
+    if (!passthrough()) return ERROR_DEVICE_NOT_CONNECTED;
     static auto fn = resolve<DWORD(WINAPI*)(DWORD, DWORD, void*)>("XInputGetCapabilities");
     return fn ? fn(index, flags, caps) : ERROR_DEVICE_NOT_CONNECTED;
 }
 
 BGD_DLLEXPORT void WINAPI XInputEnable(BOOL enable) {
+    if (!passthrough()) return;
     static auto fn = resolve<void(WINAPI*)(BOOL)>("XInputEnable");
     if (fn) fn(enable);
 }
 
 BGD_DLLEXPORT DWORD WINAPI XInputGetBatteryInformation(DWORD index, BYTE devType, void* info) {
+    if (!passthrough()) return ERROR_DEVICE_NOT_CONNECTED;
     static auto fn = resolve<DWORD(WINAPI*)(DWORD, BYTE, void*)>("XInputGetBatteryInformation");
     return fn ? fn(index, devType, info) : ERROR_DEVICE_NOT_CONNECTED;
 }
 
 BGD_DLLEXPORT DWORD WINAPI XInputGetKeystroke(DWORD index, DWORD reserved, void* keystroke) {
+    if (!passthrough()) return ERROR_DEVICE_NOT_CONNECTED;
     static auto fn = resolve<DWORD(WINAPI*)(DWORD, DWORD, void*)>("XInputGetKeystroke");
     return fn ? fn(index, reserved, keystroke) : ERROR_DEVICE_NOT_CONNECTED;
 }
 
 BGD_DLLEXPORT DWORD WINAPI XInputGetDSoundAudioDeviceGuids(DWORD index, GUID* render, GUID* capture) {
+    if (!passthrough()) return ERROR_DEVICE_NOT_CONNECTED;
     static auto fn = resolve<DWORD(WINAPI*)(DWORD, GUID*, GUID*)>("XInputGetDSoundAudioDeviceGuids");
     return fn ? fn(index, render, capture) : ERROR_DEVICE_NOT_CONNECTED;
 }

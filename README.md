@@ -2,12 +2,6 @@
 
 A small Geometry Dash mod loader where mods are written in [Luau](https://luau.org).
 
-## ⚠️ WARNING:
-This project was **"Vibecoded"** (Fully or some parts of it was written by AI.)  
-I don't know C++, And probably **NOT** gonna continue this.  
-It is **NOT** Recommended for use **NOR** Recommended for making mods here.  
-If you need a Geometry dash mod loader, i recommend using **GEODE**.
-
 **Status: v0.1 skeleton.** It was written without being compiled or run against the game, so expect to fix a few build errors and verify the hook names (see "Things to verify").
 
 ## How it works

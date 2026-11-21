@@ -29,3 +29,13 @@ When you report a problem, include: your Windows version (or Proton version), `l
 ## Nothing happens
 
 No `log.txt` at all means the DLL never loaded. Check that `XInput1_4.dll` is next to `GeometryDash.exe`, and on Linux that the Steam launch option is `WINEDLLOVERRIDES="XInput1_4=n,b" %command%`.
+
+## Controllers
+
+`XInput1_4.dll` (the loader) currently reports "no controller connected" to the game, so gamepads do nothing while BrilliantGd is installed. This is on purpose: forwarding to the real Windows XInput crashed the game on some setups (see `crash.log`). To try forwarding anyway, add this to `BrilliantGd/config.json`:
+
+```json
+{ "xinput_passthrough": true }
+```
+
+If the game then crashes inside `XInput1_4.dll`, set it back to `false` and send me the new `crash.log`.

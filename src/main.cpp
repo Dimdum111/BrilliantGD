@@ -213,6 +213,9 @@ DWORD WINAPI bootstrap(LPVOID) {
 
     bgd::console::init_if_enabled();
     bgd::write_log(Level::Info, "BrilliantGd 0.1.0 starting");
+    bgd::write_log(Level::Info, bgd::config_bool("xinput_passthrough", false)
+                                    ? "XInput passthrough: on"
+                                    : "XInput passthrough: off (controller input disabled; see docs/TROUBLESHOOTING.md)");
 
     HMODULE cocos = GetModuleHandleA("libcocos2d.dll");
     if (!cocos) {
