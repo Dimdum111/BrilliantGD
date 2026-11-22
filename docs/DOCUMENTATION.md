@@ -69,13 +69,42 @@ end)
 | `bgd.module(name)` | Base address of a loaded DLL, or `nil` |
 | `bgd.export(module, symbol)` | Address of a DLL export, or `nil` |
 | `bgd.mem.read_*` / `write_*` | Raw memory access: `u8 u16 u32 i32 ptr f32 f64 bytes` |
-| `bgd.mod` | `{ id, name, version, author, dir }` |
+| `bgd.mod` | This mod's info: `{ id, name, version, author, description, main, dir }` |
+| `bgd.mods.list()` | Every installed mod, as a list of info tables (see below) |
+| `bgd.mods.get(id)` | One mod's info table, or `nil` |
+| `bgd.mods.is_loaded(id)` | Is that mod loaded right now |
+| `bgd.mods.count()` | Returns `loaded, failed` counts |
+| `bgd.mods.folder()` | Path of the `mods` folder |
 | `bgd.version` | Loader version |
 | `bgd.ui` | Windows and widgets drawn over the game, see [UI.md](UI.md) |
 
 Editors with [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) can load `types/bgd.d.luau` for autocomplete.
 
 There are no Geometry Dash bindings yet, so mods can't call game functions by name. They can read and write memory if you know the addresses.
+
+### Installed mods
+
+`bgd.mods.list()` returns a list with one table per mod folder that has a `mod.json`:
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `name`, `version`, `author`, `description` | From `mod.json` (`description` is optional) |
+| `main`, `dir` | Script file name and the mod's folder |
+| `status` | `"loaded"` or `"failed"` |
+| `error` | Why it failed (only when `status` is `"failed"`) |
+| `index` | Load order, starting at 1 (0 for failed mods) |
+| `is_self` | `true` for the mod that is asking |
+| `manifest` | The whole `mod.json` as a table, so you can read your own extra fields |
+
+Call it inside `bgd.on("ready", ...)` to see every mod. While mods are still loading, a mod only sees the ones loaded before it. The list is a snapshot, so call it again to refresh. Mods can see each other's info but not each other's code.
+
+```lua
+bgd.on("ready", function()
+	for _, mod in ipairs(bgd.mods.list()) do
+		bgd.log.info(mod.name, mod.version, mod.status)
+	end
+end)
+```
 
 ## Console
 

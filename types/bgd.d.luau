@@ -493,11 +493,23 @@ declare bgd: {
 		screen_size: () -> (number, number),
 	},
 
+	-- Every installed mod. Call inside bgd.on("ready", ...) to see all of them; during load you only see mods loaded before yours.
+	-- status is "loaded" or "failed" (failed mods have `error` set and index 0). index is the load order. manifest is the raw mod.json.
+	mods: {
+		list: () -> { { id: string, name: string, version: string, author: string, description: string, dir: string, main: string, status: string, error: string?, is_self: boolean, index: number, manifest: { [string]: any } } },
+		get: (id: string) -> { id: string, name: string, version: string, author: string, description: string, dir: string, main: string, status: string, error: string?, is_self: boolean, index: number, manifest: { [string]: any } }?,
+		is_loaded: (id: string) -> boolean,
+		count: () -> (number, number),
+		folder: () -> string,
+	},
+
 	mod: {
 		id: string,
 		name: string,
 		version: string,
 		author: string,
+		description: string,
+		main: string,
 		dir: string,
 	},
 }

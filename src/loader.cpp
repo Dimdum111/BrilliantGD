@@ -39,7 +39,8 @@ struct Timer {
 };
 
 struct Mod {
-    std::string id, name, version, author;
+    std::string id, name, version, author, description, mainFile;
+    json manifest;  // the whole mod.json
     fs::path dir;
     lua_State* L = nullptr;
     std::unordered_map<std::string, std::vector<int>> handlers;
@@ -50,6 +51,14 @@ struct Mod {
 };
 
 std::vector<std::unique_ptr<Mod>> g_mods;
+
+// What bgd.mods reports about a mod (loaded or failed).
+struct Info {
+    std::string id, name, version, author, description, mainFile, status, error;
+    fs::path dir;
+    json manifest;
+};
+std::vector<Info> g_failed;  // mods that were found but did not load, with the reason
 std::unique_ptr<Mod> g_repl;  // sandbox used by the console "lua" command
 Clock::time_point g_deadline;
 
@@ -340,6 +349,126 @@ void setStr(lua_State* L, const char* key, const std::string& value) {
     lua_setfield(L, -2, key);
 }
 
+// ---------------------------------------------------------------- bgd.mods
+
+void pushJson(lua_State* L, const json& j, int depth) {
+    if (depth > 8) {
+        lua_pushnil(L);
+    } else if (j.is_boolean()) {
+        lua_pushboolean(L, j.get<bool>());
+    } else if (j.is_number()) {
+        lua_pushnumber(L, j.get<double>());
+    } else if (j.is_string()) {
+        const std::string s = j.get<std::string>();
+        lua_pushlstring(L, s.data(), s.size());
+    } else if (j.is_array()) {
+        lua_createtable(L, static_cast<int>(j.size()), 0);
+        int idx = 1;
+        for (const auto& item : j) {
+            pushJson(L, item, depth + 1);
+            lua_rawseti(L, -2, idx++);
+        }
+    } else if (j.is_object()) {
+        lua_createtable(L, 0, static_cast<int>(j.size()));
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            pushJson(L, it.value(), depth + 1);
+            lua_setfield(L, -2, it.key().c_str());
+        }
+    } else {
+        lua_pushnil(L);
+    }
+}
+
+Info infoOf(const Mod& m) {
+    Info i;
+    i.id = m.id;
+    i.name = m.name;
+    i.version = m.version;
+    i.author = m.author;
+    i.description = m.description;
+    i.mainFile = m.mainFile;
+    i.status = "loaded";
+    i.dir = m.dir;
+    i.manifest = m.manifest;
+    return i;
+}
+
+void pushInfo(lua_State* L, const Info& i, const std::string& callerId, int index) {
+    lua_createtable(L, 0, 12);
+    setStr(L, "id", i.id);
+    setStr(L, "name", i.name);
+    setStr(L, "version", i.version);
+    setStr(L, "author", i.author);
+    setStr(L, "description", i.description);
+    setStr(L, "dir", i.dir.string());
+    setStr(L, "main", i.mainFile);
+    setStr(L, "status", i.status);  // "loaded" or "failed"
+    if (!i.error.empty()) setStr(L, "error", i.error);
+    lua_pushboolean(L, i.id == callerId);
+    lua_setfield(L, -2, "is_self");
+    lua_pushinteger(L, index);  // load order (1 = first); 0 for mods that failed
+    lua_setfield(L, -2, "index");
+    if (i.manifest.is_object()) pushJson(L, i.manifest, 0);
+    else lua_newtable(L);
+    lua_setfield(L, -2, "manifest");
+}
+
+int l_modsList(lua_State* L) {
+    const std::string self = modOf(L)->id;
+    lua_createtable(L, static_cast<int>(g_mods.size() + g_failed.size()), 0);
+    int n = 0;
+    for (auto& m : g_mods) {
+        pushInfo(L, infoOf(*m), self, n + 1);
+        lua_rawseti(L, -2, ++n);
+    }
+    for (auto& f : g_failed) {
+        pushInfo(L, f, self, 0);
+        lua_rawseti(L, -2, ++n);
+    }
+    return 1;
+}
+
+int l_modsGet(lua_State* L) {
+    const std::string id = luaL_checkstring(L, 1);
+    const std::string self = modOf(L)->id;
+    int index = 0;
+    for (auto& m : g_mods) {
+        index++;
+        if (m->id == id) {
+            pushInfo(L, infoOf(*m), self, index);
+            return 1;
+        }
+    }
+    for (auto& f : g_failed) {
+        if (f.id == id) {
+            pushInfo(L, f, self, 0);
+            return 1;
+        }
+    }
+    lua_pushnil(L);
+    return 1;
+}
+
+int l_modsIsLoaded(lua_State* L) {
+    const std::string id = luaL_checkstring(L, 1);
+    bool found = false;
+    for (auto& m : g_mods) found = found || m->id == id;
+    lua_pushboolean(L, found);
+    return 1;
+}
+
+int l_modsCount(lua_State* L) {  // returns: loaded, failed
+    lua_pushinteger(L, static_cast<int>(g_mods.size()));
+    lua_pushinteger(L, static_cast<int>(g_failed.size()));
+    return 2;
+}
+
+int l_modsFolder(lua_State* L) {
+    const std::string folder = (rootDir() / "mods").string();
+    lua_pushlstring(L, folder.data(), folder.size());
+    return 1;
+}
+
 void openApi(lua_State* L, Mod& m) {
     luaL_openlibs(L);
 
@@ -389,8 +518,18 @@ void openApi(lua_State* L, Mod& m) {
     setStr(L, "name", m.name);
     setStr(L, "version", m.version);
     setStr(L, "author", m.author);
+    setStr(L, "description", m.description);
+    setStr(L, "main", m.mainFile);
     setStr(L, "dir", m.dir.string());
     lua_setfield(L, -2, "mod");
+
+    lua_newtable(L);  // bgd.mods
+    setFn(L, "list", l_modsList);
+    setFn(L, "get", l_modsGet);
+    setFn(L, "is_loaded", l_modsIsLoaded);
+    setFn(L, "count", l_modsCount);
+    setFn(L, "folder", l_modsFolder);
+    lua_setfield(L, -2, "mods");
 
     ui::push_api(L, m.id);  // bgd.ui
     lua_setfield(L, -2, "ui");
@@ -423,32 +562,55 @@ bool validId(const std::string& id) {
     });
 }
 
+// Remembers why a mod folder did not load, so bgd.mods and the console can report it.
+void recordFailure(const Mod* m, const fs::path& dir, const std::string& error) {
+    Info i;
+    i.dir = dir;
+    i.status = "failed";
+    i.error = error;
+    i.id = (m && !m->id.empty()) ? m->id : dir.filename().string();
+    i.name = (m && !m->name.empty()) ? m->name : i.id;
+    if (m) {
+        i.version = m->version;
+        i.author = m->author;
+        i.description = m->description;
+        i.mainFile = m->mainFile;
+        i.manifest = m->manifest;
+    }
+    g_failed.push_back(std::move(i));
+}
+
 void loadMod(const fs::path& dir) {
     std::string raw;
     if (!readFile(dir / "mod.json", raw)) return;  // not a mod folder
 
     auto m = std::make_unique<Mod>();
     m->dir = dir;
-    std::string mainFile;
     try {
         json j = json::parse(raw);
         m->id = j.at("id").get<std::string>();
         m->name = j.value("name", m->id);
         m->version = j.value("version", "0.0.0");
         m->author = j.value("author", "unknown");
-        mainFile = j.value("main", "main.luau");
+        m->description = j.value("description", "");
+        m->mainFile = j.value("main", "main.luau");
+        m->manifest = std::move(j);
     } catch (const std::exception& e) {
         write_log(Level::Error, "Bad mod.json in " + dir.string() + ": " + e.what());
+        recordFailure(m.get(), dir, std::string("bad mod.json: ") + e.what());
         return;
     }
+    const std::string mainFile = m->mainFile;
 
     if (!validId(m->id) || !safeRel(mainFile)) {
         write_log(Level::Error, "Invalid id or main file in " + dir.string());
+        recordFailure(m.get(), dir, "invalid id or main file in mod.json");
         return;
     }
     for (auto& other : g_mods) {
         if (other->id == m->id) {
             write_log(Level::Error, "Duplicate mod id '" + m->id + "', skipping " + dir.string());
+            recordFailure(m.get(), dir, "duplicate mod id (another mod already uses '" + m->id + "')");
             return;
         }
     }
@@ -456,20 +618,25 @@ void loadMod(const fs::path& dir) {
     std::string src;
     if (!readFile(dir / mainFile, src)) {
         write_log(Level::Error, "[" + m->id + "] cannot read " + mainFile);
+        recordFailure(m.get(), dir, "cannot read " + mainFile);
         return;
     }
 
     lua_State* L = newState(*m);
 
     if (!loadChunk(L, src, "@" + m->id + "/" + mainFile)) {
-        write_log(Level::Error, "[" + m->id + "] " + errText(L));
+        const std::string err = errText(L);
+        write_log(Level::Error, "[" + m->id + "] " + err);
         closeState(L);
+        recordFailure(m.get(), dir, err);
         return;
     }
     arm();
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-        write_log(Level::Error, "[" + m->id + "] " + errText(L));
+        const std::string err = errText(L);
+        write_log(Level::Error, "[" + m->id + "] " + err);
         closeState(L);
+        recordFailure(m.get(), dir, err);
         return;
     }
 
@@ -537,9 +704,10 @@ void handleCommand(const std::string& line) {
         write_log(Level::Info, "Commands: help | mods | reload | clear | lua <code>");
         write_log(Level::Info, "Example: lua bgd.base()   (hex: lua string.format('0x%X', bgd.base()))");
     } else if (cmd == "mods") {
-        if (g_mods.empty()) write_log(Level::Info, "No mods loaded.");
+        if (g_mods.empty() && g_failed.empty()) write_log(Level::Info, "No mods loaded.");
         for (auto& m : g_mods)
             write_log(Level::Info, m->name + " v" + m->version + " by " + m->author + " (" + m->id + ")");
+        for (auto& f : g_failed) write_log(Level::Warn, "FAILED: " + f.name + " (" + f.id + "): " + f.error);
     } else if (cmd == "reload") {
         write_log(Level::Info, "Reloading mods...");
         unload_all();
@@ -571,6 +739,7 @@ void hotReloadCheck() {
 void arm_budget() { arm(); }
 
 void load_all() {
+    g_failed.clear();
     fs::path modsDir = rootDir() / "mods";
     std::error_code ec;
     fs::create_directories(modsDir, ec);
@@ -591,6 +760,7 @@ void unload_all() {
     for (auto& m : g_mods)
         if (m->L) closeState(m->L);
     g_mods.clear();
+    g_failed.clear();
 }
 
 void on_frame(double dt) {
