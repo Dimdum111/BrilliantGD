@@ -1,0 +1,8 @@
+{
+  "id": "dimdum111.brilliantgd-essentials",
+  "name": "BrilliantGD Essentials",
+  "version": "1.0.0",
+  "author": "Dimdum111",
+  "description": "BrilliantGD's Mod manager.",
+  "main": "main.luau"
+}

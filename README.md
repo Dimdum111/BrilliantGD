@@ -2,8 +2,6 @@
 
 A small Geometry Dash mod loader where mods are written in [Luau](https://luau.org).
 
-**Status: v0.1 skeleton.** It was written without being compiled or run against the game, so expect to fix a few build errors and verify the hook names (see "Things to verify").
-
 ## How it works
 
 1. `XInput1_4.dll` (this project's output) sits next to `GeometryDash.exe`. `libcocos2d.dll` imports the real XInput 1.4 DLL, so Windows loads ours instead. It forwards every XInput call to the real DLL in System32, so controllers still work.
@@ -30,10 +28,10 @@ Output: `build/Release/XInput1_4.dll`
 GeometryDash/
   GeometryDash.exe
   XInput1_4.dll          <- the built DLL
-  BrilliantGd/
-    log.txt                <- created at runtime
+  BrilliantGd/           <- BrilliantGd work folder with mods and logs (copy from zip)
+    log.txt              <- created at runtime
     mods/
-      hello-world/         <- copy example-mod/hello-world here
+      hello-world/       <- copy example-mod/hello-world here
         mod.json
         main.luau
         util.luau
@@ -46,7 +44,7 @@ Press **Ctrl+Shift+R** in-game to reload all mods without restarting.
 `mod.json`:
 
 ```json
-{ "id": "your.mod-id", "name": "My Mod", "version": "1.0.0", "author": "You", "main": "main.luau" }
+{ "id": "your.mod-id", "name": "My Mod", "version": "1.0.0", "author": "You", "description": "Short description about the mod.", "main": "main.luau" }
 ```
 
 `id` must be lowercase letters, digits, `.`, `_` or `-`. `main` defaults to `main.luau`.

@@ -33,6 +33,7 @@ jobs:
           mkdir -p dist
           cp build/XInput1_4.dll dist/
           cp -r example-mod dist/example-mod
+          cp -r BrilliantGd dist/BrilliantGd
 
       - name: Upload
         uses: actions/upload-artifact@v4
