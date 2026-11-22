@@ -2,8 +2,6 @@
 
 BrilliantGd is a mod loader for Geometry Dash (64-bit, Windows or Linux through Proton). Mods are written in [Luau](https://luau.org), a fast, sandboxed Lua 5.1 dialect, and run inside the game.
 
-> Experimental and AI-assisted. Expect bugs, and back up your game folder before installing.
-
 ## Install
 
 1. Get `XInput1_4.dll` from the **BrilliantGd** artifact of the latest GitHub Actions build.
