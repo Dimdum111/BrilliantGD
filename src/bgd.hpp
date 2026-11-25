@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include <string>
+#include <vector>
 
 struct lua_State;
 
@@ -44,6 +45,23 @@ void push_api(lua_State* L, const std::string& modId);
 void forget_state(lua_State* L);
 
 }  // namespace ui
+
+namespace cui {
+
+// bgd.cui: native cocos2d sprites, labels and buttons that live inside game scenes.
+void push_api(lua_State* L, const std::string& modId, const std::string& modDir);
+// bgd.scene: current(), names(), is().
+void push_scene_api(lua_State* L);
+// Removes every node a state created. Call right before lua_close().
+void forget_state(lua_State* L);
+// Once per frame on the game thread: detects scene changes, builds/removes nodes, runs button callbacks.
+void update();
+// Returns true once per scene change, with the new and previous scene names.
+bool take_scene_change(std::string& name, std::string& previous);
+// Human-readable scene details for the console `scene` command.
+std::vector<std::string> describe_scene();
+
+}  // namespace cui
 
 namespace loader {
 

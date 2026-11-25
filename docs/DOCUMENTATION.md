@@ -2,8 +2,6 @@
 
 BrilliantGd is a mod loader for Geometry Dash (64-bit, Windows or Linux through Proton). Mods are written in [Luau](https://luau.org), a fast, sandboxed Lua 5.1 dialect, and run inside the game.
 
-> Experimental and AI-assisted. Expect bugs, and back up your game folder before installing.
-
 ## Install
 
 1. Get `XInput1_4.dll` from the **BrilliantGd** artifact of the latest GitHub Actions build.
@@ -61,6 +59,7 @@ end)
 | --- | --- |
 | `bgd.on("ready", fn)` | Runs once after all mods have loaded |
 | `bgd.on("frame", fn(dt))` | Runs every frame; `dt` is seconds since the last frame |
+| `bgd.on("scene_change", fn(name, previous))` | Runs when the game switches scene; `previous` is `nil` for the first scene |
 | `bgd.after(sec, fn)` / `bgd.every(sec, fn)` | One-shot or repeating timer; returns an id |
 | `bgd.cancel(id)` | Cancels a timer |
 | `bgd.key_down(vk)` | Is a [virtual key](https://learn.microsoft.com/windows/win32/inputdev/virtual-key-codes) held (false when the game isn't focused) |
@@ -76,7 +75,9 @@ end)
 | `bgd.mods.count()` | Returns `loaded, failed` counts |
 | `bgd.mods.folder()` | Path of the `mods` folder |
 | `bgd.version` | Loader version |
-| `bgd.ui` | Windows and widgets drawn over the game, see [UI.md](UI.md) |
+| `bgd.ui` | Windows and widgets drawn over the game (an ImGui overlay), see [UI.md](UI.md) |
+| `bgd.cui` | Sprites, labels and buttons that live inside the game's scenes, see [CUI.md](CUI.md) |
+| `bgd.scene.current()` / `names()` / `is(name)` | Which scene is running, by the game's layer class names |
 
 Editors with [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) can load `types/bgd.d.luau` for autocomplete.
 
@@ -114,6 +115,7 @@ The console window shows live logs. You can type:
 | --- | --- |
 | `help` | List commands |
 | `mods` | List loaded mods |
+| `scene` | Show the running scene's name and layers (use them in `scenes = {...}`) |
 | `reload` | Reload all mods |
 | `clear` | Clear the console |
 | `lua <code>` | Run Luau in a sandbox with the `bgd` API, e.g. `lua bgd.base()` |

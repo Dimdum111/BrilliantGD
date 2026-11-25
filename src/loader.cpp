@@ -132,7 +132,8 @@ int l_error(lua_State* L) { return logWith(L, Level::Error); }
 int l_on(lua_State* L) {
     std::string ev = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
-    if (ev != "ready" && ev != "frame") luaL_error(L, "unknown event '%s' (expected 'ready' or 'frame')", ev.c_str());
+    if (ev != "ready" && ev != "frame" && ev != "scene_change")
+        luaL_error(L, "unknown event '%s' (expected 'ready', 'frame' or 'scene_change')", ev.c_str());
     lua_pushvalue(L, 2);
     int ref = lua_ref(L, -1);  // Luau's lua_ref does not pop
     lua_pop(L, 1);
@@ -194,6 +195,30 @@ void emit(Mod& m, const char* ev, const double* arg = nullptr) {
         list.erase(std::remove(list.begin(), list.end(), ref), list.end());
         lua_unref(m.L, ref);
         write_log(Level::Warn, "[" + m.id + "] handler for '" + ev + "' disabled after an error");
+    }
+}
+
+// scene_change handlers get (name, previous); previous is nil for the very first scene.
+void emitSceneChange(const std::string& name, const std::string& previous) {
+    for (auto& m : g_mods) {
+        auto it = m->handlers.find("scene_change");
+        if (it == m->handlers.end()) continue;
+        std::vector<int> refs = it->second;
+        for (int ref : refs) {
+            lua_State* L = m->L;
+            lua_getref(L, ref);
+            lua_pushlstring(L, name.data(), name.size());
+            if (previous.empty()) lua_pushnil(L);
+            else lua_pushlstring(L, previous.data(), previous.size());
+            arm();
+            if (lua_pcall(L, 2, 0, 0) == LUA_OK) continue;
+            write_log(Level::Error, "[" + m->id + "] " + errText(L));
+            lua_pop(L, 1);
+            auto& list = m->handlers["scene_change"];
+            list.erase(std::remove(list.begin(), list.end(), ref), list.end());
+            lua_unref(L, ref);
+            write_log(Level::Warn, "[" + m->id + "] handler for 'scene_change' disabled after an error");
+        }
     }
 }
 
@@ -534,6 +559,12 @@ void openApi(lua_State* L, Mod& m) {
     ui::push_api(L, m.id);  // bgd.ui
     lua_setfield(L, -2, "ui");
 
+    cui::push_api(L, m.id, m.dir.string());  // bgd.cui
+    lua_setfield(L, -2, "cui");
+
+    cui::push_scene_api(L);  // bgd.scene
+    lua_setfield(L, -2, "scene");
+
     lua_setglobal(L, "bgd");
 
     // Lock down the standard libraries; each mod still gets its own writable globals.
@@ -551,6 +582,7 @@ lua_State* newState(Mod& m) {
 }
 
 void closeState(lua_State* L) {
+    cui::forget_state(L);
     ui::forget_state(L);
     lua_close(L);
 }
@@ -701,13 +733,15 @@ void handleCommand(const std::string& line) {
     std::string rest = sp == std::string::npos ? "" : line.substr(sp + 1);
 
     if (cmd == "help") {
-        write_log(Level::Info, "Commands: help | mods | reload | clear | lua <code>");
+        write_log(Level::Info, "Commands: help | mods | scene | reload | clear | lua <code>");
         write_log(Level::Info, "Example: lua bgd.base()   (hex: lua string.format('0x%X', bgd.base()))");
     } else if (cmd == "mods") {
         if (g_mods.empty() && g_failed.empty()) write_log(Level::Info, "No mods loaded.");
         for (auto& m : g_mods)
             write_log(Level::Info, m->name + " v" + m->version + " by " + m->author + " (" + m->id + ")");
         for (auto& f : g_failed) write_log(Level::Warn, "FAILED: " + f.name + " (" + f.id + "): " + f.error);
+    } else if (cmd == "scene") {
+        for (const std::string& line : cui::describe_scene()) write_log(Level::Info, line);
     } else if (cmd == "reload") {
         write_log(Level::Info, "Reloading mods...");
         unload_all();
@@ -767,6 +801,11 @@ void on_frame(double dt) {
     std::string command;
     while (console::pop_command(command)) handleCommand(command);
     hotReloadCheck();
+
+    cui::update();  // scene detection, bgd.cui nodes and button clicks
+    std::string sceneName, scenePrevious;
+    if (cui::take_scene_change(sceneName, scenePrevious)) emitSceneChange(sceneName, scenePrevious);
+
     for (auto& m : g_mods) {
         runTimers(*m, dt);
         emit(*m, "frame", &dt);

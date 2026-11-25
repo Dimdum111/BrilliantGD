@@ -1,0 +1,8 @@
+{
+  "id": "example.cui-demo",
+  "name": "CUI Demo",
+  "version": "1.0.0",
+  "author": "You",
+  "description": "Native in-game sprites, labels and buttons (bgd.cui).",
+  "main": "main.luau"
+}

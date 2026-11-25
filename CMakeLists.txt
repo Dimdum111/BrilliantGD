@@ -53,6 +53,7 @@ add_library(BrilliantGd SHARED
   src/main.cpp
   src/console.cpp
   src/ui.cpp
+  src/cui.cpp
   src/loader.cpp
   src/proxy.cpp)
 
